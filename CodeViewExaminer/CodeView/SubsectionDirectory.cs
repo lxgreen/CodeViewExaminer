@@ -1,33 +1,34 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.IO;
 
-namespace CodeViewExaminer.CodeView
+namespace Igloo
 {
     public class SubsectionDirectory
     {
         public SubsectionDirectoryHeader Header;
         public SubsectionData[] Sections;
 
-        public static SubsectionDirectory Read(long lfaBase,BinaryReader r)
+        public static SubsectionDirectory Read(long lfaBase, BinaryReader r)
         {
             // Read directory section header
-            var hdr = Misc.FromBinaryReader<SubsectionDirectoryHeader>(r);
+            SubsectionDirectoryHeader hdr = Misc.FromBinaryReader<SubsectionDirectoryHeader>(r);
 
-            var sd = new SubsectionDirectory {
-                Header=hdr
-            };
+            SubsectionDirectory sd = new SubsectionDirectory();
+            sd.Header = hdr;
 
             // Read entry headers
-            var eheaders = new DirectoryEntryHeader[(int)hdr.DirectoryCount];
+            DirectoryEntryHeader[] eheaders = new DirectoryEntryHeader[(int)hdr.DirectoryCount];
             for (int i = 0; i < hdr.DirectoryCount; i++)
-                eheaders[i]=Misc.FromBinaryReader<DirectoryEntryHeader>(r);
+            {
+                eheaders[i] = Misc.FromBinaryReader<DirectoryEntryHeader>(r);
+            }
 
             // Read directory entry contents
             sd.Sections = new SubsectionData[hdr.DirectoryCount];
-            for(int i=0;i<hdr.DirectoryCount;i++)
+            for (int i = 0; i < hdr.DirectoryCount; i++)
+            {
                 sd.Sections[i] = SubsectionData.Read(lfaBase, eheaders[i], r);
+            }
 
             return sd;
         }

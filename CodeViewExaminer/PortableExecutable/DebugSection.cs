@@ -1,45 +1,54 @@
 ﻿using System.IO;
-using CodeViewExaminer.CodeView;
 
-namespace CodeViewExaminer.PortableExecutable
+// https://github.com/aBothe/CodeViewExaminer
+
+namespace Igloo
 {
-	public class DebugSectionReader : ISectionHandler
-	{
-		public bool CanHandle(string SectionName)
-		{
-			return SectionName==".debug";
-		}
+    public class DebugSectionReader : ISectionHandler
+    {
+        public bool CanHandle(string SectionName)
+        {
+            return SectionName == ".debug";
+        }
 
-		public CodeSection Handle(PeHeader PeHeader, PeSectionHeader hdr, BinaryReader r)
-		{
-			var entryInfo = Misc.FromBinaryReader<IMAGE_DEBUG_DIRECTORY>(r);
+        public CodeSection Handle(PeHeader PeHeader, PeSectionHeader hdr, BinaryReader reader)
+        {
+            IMAGE_DEBUG_DIRECTORY entryInfo = Misc.FromBinaryReader<IMAGE_DEBUG_DIRECTORY>(reader);
 
-			if (entryInfo.PointerToRawData == 0)
-				return null;
+            if (entryInfo.PointerToRawData == 0)
+            {
+                return null;
+            }
 
-			r.BaseStream.Position = entryInfo.PointerToRawData;
+            reader.BaseStream.Position = entryInfo.PointerToRawData;
 
-			if (entryInfo.Type == IMAGE_DEBUG_TYPE.CODEVIEW)
-				return new CodeViewDebugSection { 
-					EntryInformation=entryInfo,
-					SectionHeader=hdr,
-					Data = CodeViewReader.Read(entryInfo,r),
-				};
+            if (entryInfo.Type == IMAGE_DEBUG_TYPE.CODEVIEW)
+            {
+                CodeViewDebugSection codeViewDebugSection = new CodeViewDebugSection();
 
-			return new DebugSection { SectionHeader=hdr, EntryInformation=entryInfo };
-		}
-	}
+                codeViewDebugSection.EntryInformation = entryInfo;
+                codeViewDebugSection.SectionHeader = hdr;
+                codeViewDebugSection.Data = CodeViewReader.Read(entryInfo, reader);
+                return codeViewDebugSection;
+            }
 
-	public class DebugSection : CodeSection
-	{
-		public IMAGE_DEBUG_DIRECTORY EntryInformation;
-	}
+            DebugSection dSection = new DebugSection();
+            dSection.SectionHeader = hdr;
+            dSection.EntryInformation = entryInfo;
+            return dSection;
+        }
+    }
 
-	/// <summary>
-	/// A dedicated section object which stores CodeView information
-	/// </summary>
-	public class CodeViewDebugSection : DebugSection
-	{
-		public CodeViewData Data;
-	}
+    public class DebugSection : CodeSection
+    {
+        public IMAGE_DEBUG_DIRECTORY EntryInformation;
+    }
+
+    /// <summary>
+    /// A dedicated section object which stores CodeView information
+    /// </summary>
+    public class CodeViewDebugSection : DebugSection
+    {
+        public CodeViewData Data;
+    }
 }

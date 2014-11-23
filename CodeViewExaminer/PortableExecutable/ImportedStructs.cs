@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace CodeViewExaminer
+namespace Igloo
 {
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
 	public struct IMAGE_DOS_HEADER

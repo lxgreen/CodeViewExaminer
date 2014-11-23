@@ -1,53 +1,59 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.IO;
 
-namespace CodeViewExaminer.CodeView
+namespace Igloo
 {
-	public abstract class SubsectionData
-	{
-		public static SubsectionData Read(long lfaBase, DirectoryEntryHeader hdr, BinaryReader r)
-		{
-			SubsectionData sd = null;
+    public abstract class SubsectionData
+    {
+        protected static readonly ILog _Log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
-			switch (hdr.Type)
-			{
-				case SubsectionType.sstModule:
-					sd = new sstModule();
-					break;
-				case SubsectionType.sstSrcModule:
-					sd = new sstSrcModule();
-					break;
-				case SubsectionType.sstLibraries:
-					sd = new sstLibraries();
-					break;
-				case SubsectionType.sstGlobalSym:
-					sd = new sstGlobalSym();
-					break;
-				case SubsectionType.sstGlobalTypes:
-					sd = new sstGlobalTypes();
-					break;
-				case SubsectionType.sstSegName:
-					sd = new sstSegName();
-					break;
-				case SubsectionType.sstFileIndex:
-					sd = new sstFileIndex();
-					break;
-			}
+        public static SubsectionData Read(long lfaBase, DirectoryEntryHeader hdr, BinaryReader r)
+        {
+            SubsectionData sd = null;
 
-			if (sd != null)
-			{
-				sd.Header = hdr;
-				r.BaseStream.Position = lfaBase + hdr.ContentOffset;
-				sd.Read(r);
-			}
+            switch (hdr.Type)
+            {
+                case SubsectionType.SSTModule:
+                    sd = new SSTModule();
+                    break;
 
-			return sd;
-		}
+                case SubsectionType.SSTSrcModule:
+                    sd = new SSTSrcModule();
+                    break;
 
-		public DirectoryEntryHeader Header;
+                case SubsectionType.SSTLibraries:
+                    sd = new SSTLibraries();
+                    break;
 
-		public abstract void Read(BinaryReader reader);
-	}
+                case SubsectionType.SSTGlobalSym:
+                    sd = new SSTGlobalSym();
+                    break;
+
+                case SubsectionType.SSTGlobalTypes:
+                    sd = new SSTGlobalTypes();
+                    break;
+
+                case SubsectionType.SSTSegName:
+                    sd = new SSTSegName();
+                    break;
+
+                case SubsectionType.SSTFileIndex:
+                    sd = new SSTFileIndex();
+                    break;
+            }
+
+            if (sd != null)
+            {
+                sd.Header = hdr;
+                r.BaseStream.Position = lfaBase + hdr.ContentOffset;
+                sd.Read(r);
+            }
+
+            return sd;
+        }
+
+        public DirectoryEntryHeader Header;
+
+        public abstract void Read(BinaryReader reader);
+    }
 }

@@ -1,27 +1,23 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace CodeViewExaminer.PortableExecutable
+namespace Igloo
 {
-	public class ImportSectionReader : ISectionHandler
-	{
-		public bool CanHandle(string SectionName)
-		{
-			return SectionName == ".idata";
-		}
+    public class ImportSectionReader : ISectionHandler
+    {
+        public bool CanHandle(string SectionName)
+        {
+            return SectionName == ".idata";
+        }
 
-		public CodeSection Handle(PeHeader PeHeader, PeSectionHeader Header, System.IO.BinaryReader Reader)
-		{
-			var imps = new ImportSection();
+        public CodeSection Handle(PeHeader PeHeader, PeSectionHeader Header, System.IO.BinaryReader Reader)
+        {
+            ImportSection imps = new ImportSection();
 
+            return imps;
+        }
+    }
 
-			return imps;
-		}
-	}
-
-	public class ImportSection : CodeSection
-	{
-
-	}
+    public class ImportSection : CodeSection
+    {
+    }
 }

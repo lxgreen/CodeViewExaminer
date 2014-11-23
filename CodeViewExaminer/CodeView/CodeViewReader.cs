@@ -1,67 +1,72 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.IO;
+using System.Text;
 
-namespace CodeViewExaminer.CodeView
+// https://github.com/aBothe/CodeViewExaminer
+
+namespace Igloo
 {
-	public class CodeViewReader
-	{
-		public const string CodeViewSignature = "NB09";
+    public class CodeViewReader
+    {
+        public const string CodeViewSignature = "NB09";
 
-		IMAGE_DEBUG_DIRECTORY ddir;
-		BinaryReader r;
-		CodeViewData cvData=new CodeViewData();
+        private IMAGE_DEBUG_DIRECTORY _imageDebugDirectory;
+        private BinaryReader _binaryReader;
+        private CodeViewData _codeViewData = new CodeViewData();
+        protected static readonly ILog _Log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
-		/// <summary>
-		/// Reads debug information from a file handle.
-		/// The hFile parameter has to be closed afterwards manually(!).
-		/// </summary>
-		public static CodeViewData Read(IntPtr hFile, long debugInfoOffset, long debugInfoSize)
-		{
-			if (debugInfoSize == 0)
-				return null;
+        /// <summary>
+        /// Reads debug information from a file handle.
+        /// The hFile parameter has to be closed afterwards manually(!).
+        /// </summary>
+        public static CodeViewData Read(IntPtr hFile, long debugInfoOffset, long debugInfoSize)
+        {
+            if (debugInfoSize == 0)
+                return null;
 
-			using(var file = new FileStream(hFile, FileAccess.Read))
-			using(var r = new BinaryReader(file))
-			{
-				file.Position = debugInfoOffset;
-				var cvReader = new CodeViewReader { r = r };
-				cvReader.DoRead();
+            using (FileStream file = new FileStream(hFile, FileAccess.Read))
+            {
+                using (BinaryReader r = new BinaryReader(file))
+                {
+                    file.Position = debugInfoOffset;
+                    CodeViewReader cvReader = new CodeViewReader { _binaryReader = r };
+                    cvReader.DoRead();
 
-				return cvReader.cvData;
-			}
-		}
+                    return cvReader._codeViewData;
+                }
+            }
+        }
 
-		public static CodeViewData Read(IMAGE_DEBUG_DIRECTORY ddir,BinaryReader r)
-		{
-			var cvReader = new CodeViewReader { ddir=ddir,	r=r	};
+        public static CodeViewData Read(IMAGE_DEBUG_DIRECTORY ddir, BinaryReader r)
+        {
+            CodeViewReader cvReader = new CodeViewReader { _imageDebugDirectory = ddir, _binaryReader = r };
 
-			cvReader.DoRead();
+            cvReader.DoRead();
 
-			return cvReader.cvData;
-		}
+            return cvReader._codeViewData;
+        }
 
-		void DoRead()
-		{
-			/*
-			 * For more info, see codeviewNB09.pdf, point 7. "Symbol and Type Format for Microsoft Executables" 
-			 * (pdf page 71)
-			 */
+        private void DoRead()
+        {
+            /*
+             * For more info, see codeviewNB09.pdf, point 7. "Symbol and Type Format for Microsoft Executables"
+             * (pdf page 71)
+             */
 
-			cvData.lfaBase = r.BaseStream.Position;
+            _codeViewData.lfaBase = _binaryReader.BaseStream.Position;
 
-			// Ensure that there's the right CodeView4 signature
-			var signature = Encoding.ASCII.GetString(r.ReadBytes(4));
-			if (signature != CodeViewSignature)
-				throw new InvalidDataException("Invalid CodeView Format: Signature '"+CodeViewSignature+"' expected, '"+signature+"' found at position "+cvData.lfaBase);
+            // Ensure that there's the right CodeView4 signature
+            string signature = Encoding.ASCII.GetString(_binaryReader.ReadBytes(4));
+            if (signature != CodeViewSignature)
+            {
+                _Log.Error("Invalid Data Exception", new InvalidDataException("Invalid CodeView Format: Signature '" + CodeViewSignature + "' expected, '" + signature + "' found at position " + _codeViewData.lfaBase));
+            }
+            // Read 'Subsection Directory' address
+            _codeViewData.lfoDirectory = _binaryReader.ReadUInt32();
 
-			// Read 'Subsection Directory' address
-			cvData.lfoDirectory = r.ReadUInt32();
+            _binaryReader.BaseStream.Position = _codeViewData.lfaBase + _codeViewData.lfoDirectory;
 
-			r.BaseStream.Position = cvData.lfaBase + cvData.lfoDirectory;
-
-            cvData.SubsectionDirectory = SubsectionDirectory.Read(cvData.lfaBase,r);
-		}
-	}
+            _codeViewData.SubsectionDirectory = SubsectionDirectory.Read(_codeViewData.lfaBase, _binaryReader);
+        }
+    }
 }

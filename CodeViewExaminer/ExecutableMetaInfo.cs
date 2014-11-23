@@ -1,142 +1,161 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
-using CodeViewExaminer.CodeView;
-using CodeViewExaminer.PortableExecutable;
 
-namespace CodeViewExaminer
+// https://github.com/aBothe/CodeViewExaminer
+
+namespace Igloo
 {
-	/// <summary>
-	/// Central class that provides extraction of meta information from a portable executable file.
-	/// </summary>
-	public class ExecutableMetaInfo
-	{
-		#region Properties
-		public PeHeader PEHeader { get; private set; }
-		public PeSectionHeader[] SectionHeaders { get; private set; }
-		public CodeSection[] CodeSections { get; private set; }
+    /// <summary>
+    /// Central class that provides extraction of meta information from a portable executable file.
+    /// </summary>
+    public class ExecutableMetaInfo
+    {
+        public PeHeader PEHeader { get; private set; }
 
-		public CodeViewDebugSection CodeViewSection { get; private set; }
-		private sstSrcModule[] sourceModuleSections;
-		#endregion
+        public PeSectionHeader[] SectionHeaders { get; private set; }
 
-		#region Constructor/IO
-		private ExecutableMetaInfo() { }
+        public CodeSection[] CodeSections { get; private set; }
 
-		public static ExecutableMetaInfo ExtractFrom(string executableFile)
-		{
-			using (var stream = new FileStream(executableFile, FileMode.Open, FileAccess.Read))
-			using (var br = new BinaryReader(stream))
-			{
-				var emi = new ExecutableMetaInfo();
-				emi.Read(br);
-				return emi;
-			}
-		}
-		#endregion
+        public CodeViewDebugSection CodeViewSection { get; private set; }
 
-		#region Init
-		protected void Read(BinaryReader br)
-		{
-			// Read initial headers
-			PEHeader = PeHeaderReader.Read(br);
+        private SSTSrcModule[] sourceModuleSections;
 
-			// Read out section information
-			SectionHeaders = PeSectionReader.ReadSectionHeaders(PEHeader, br);
+        private ExecutableMetaInfo()
+        {
+        }
 
-			// Read out section data
-			CodeSections = PeSectionReader.ReadSections(PEHeader, SectionHeaders,
-				br,
-				new DebugSectionReader(),
-				new ImportSectionReader()
-				//new TlsSectionReader()
-				//,new ExportSectionReader()
-				);
+        public static ExecutableMetaInfo ExtractFrom(string executableFile)
+        {
+            using (FileStream stream = new FileStream(executableFile, FileMode.Open, FileAccess.Read))
+            {
+                using (BinaryReader br = new BinaryReader(stream))
+                {
+                    ExecutableMetaInfo emi = new ExecutableMetaInfo();
+                    emi.Read(br);
+                    return emi;
+                }
+            }
+        }
 
-			foreach(var codeSection in CodeSections)
-				if (codeSection is CodeViewDebugSection)
-				{
-					CodeViewSection = (CodeViewDebugSection)codeSection;
+        protected void Read(BinaryReader br)
+        {
+            // Read initial headers
+            PEHeader = PeHeaderReader.Read(br);
 
-					// Scan its sections for the sstSrcModule subsection -- in this one, all offset<>line couples are stored
-					var sstSrcModules = new List<sstSrcModule>();
-					foreach (var ss in CodeViewSection.Data.SubsectionDirectory.Sections)
-						if (ss is sstSrcModule)
-							sstSrcModules.Add((sstSrcModule)ss);
-					sourceModuleSections = sstSrcModules.ToArray();
+            // Read out section information
+            SectionHeaders = PeSectionReader.ReadSectionHeaders(PEHeader, br);
 
-					break;
-				}
-		}
-		#endregion
+            // Read out section data
+            CodeSections = PeSectionReader.ReadSections(PEHeader, SectionHeaders,
+                br,
+                new DebugSectionReader(),
+                new ImportSectionReader()
+                //new TlsSectionReader()
+                //,new ExportSectionReader()
+                );
 
-		public bool TryDetermineCodeLocation(uint virtualMemoryOffset, out string module, out ushort line)
-		{
-			// Convert the memory offset into a section offset
-			var CodeOffset = 
-				virtualMemoryOffset - 
-				PEHeader.OptionalHeader32.ImageBase - 
-				PEHeader.OptionalHeader32.BaseOfCode;
+            foreach (var codeSection in CodeSections)
+            {
+                if (codeSection is CodeViewDebugSection)
+                {
+                    CodeViewSection = (CodeViewDebugSection)codeSection;
 
-			module = null;
-			line = 0;
+                    // Scan its sections for the sstSrcModule subsection -- in this one, all offset<>line couples are stored
+                    List<SSTSrcModule> sstSrcModules = new List<SSTSrcModule>();
+                    foreach (var section in CodeViewSection.Data.SubsectionDirectory.Sections)
+                    {
+                        if (section is SSTSrcModule)
+                        {
+                            sstSrcModules.Add((SSTSrcModule)section);
+                        }
+                    }
+                    sourceModuleSections = sstSrcModules.ToArray();
 
-			if (sourceModuleSections!=null)
-				foreach(var src in sourceModuleSections)
-					foreach (var fi in src.FileInfo) // Enum over all program sources
-							for (uint k = 0; k < fi.Segments.Length; k++)
-								// (All segments do have start&end offsets for making searching the offset faster)
-								if (CodeOffset >= fi.segmentStartOffsets[k] &&
-									CodeOffset <= fi.segmentEndOffsets[k])
-								{
-									// If our code is within this segment, the code must be inside this file
-									module = fi.SourceFileName;
+                    break;
+                }
+            }
+        }
 
-									var segment = fi.Segments[k];
+        public bool TryDetermineCodeLocation(uint virtualMemoryOffset, out string module, out ushort line)
+        {
+            // Convert the memory offset into a section offset
+            uint CodeOffset = virtualMemoryOffset - PEHeader.OptionalHeader32.ImageBase - PEHeader.OptionalHeader32.BaseOfCode;
 
-									// Break at the first line that lies behind the line offset and decrease m to select the actual line again.
-									// If there's one line in the segment only, m remains 0 and will be selected then
-									int m = 0;
-									for (; m < segment.Lines.Length; m++)
-										if (CodeOffset < segment.Offsets[m])
-										{
-											m--;
-											break;
-										}
+            module = null;
+            line = 0;
 
-									line = segment.Lines[m];
-									return true;
-								}
+            if (sourceModuleSections != null)
+            {
+                foreach (SSTSrcModule src in sourceModuleSections)
+                {
+                    foreach (SSTSrcModule.SourceFileInformation fi in src.FileInfo) // Enum over all program sources
+                    {
+                        for (uint k = 0; k < fi.Segments.Length; k++)
+                        {
+                            // (All segments do have start&end offsets for making searching the offset faster)
+                            if (CodeOffset >= fi.segmentStartOffsets[k] && CodeOffset <= fi.segmentEndOffsets[k])
+                            {
+                                // If our code is within this segment, the code must be inside this file
+                                module = fi.SourceFileName;
 
-			return false;
-		}
+                                SSTSrcModule.SourceSegmentInfo segment = fi.Segments[k];
 
-		public bool TryGetOffsetByCodeLocation(string module, ushort line, out uint virtualMemoryOffset)
-		{
-			virtualMemoryOffset = 0;
+                                // Break at the first line that lies behind the line offset and decrease m to select the actual line again.
+                                // If there's one line in the segment only, m remains 0 and will be selected then
+                                int m = 0;
+                                for (; m < segment.Lines.Length; m++)
+                                {
+                                    if (CodeOffset < segment.Offsets[m])
+                                    {
+                                        m--;
+                                        break;
+                                    }
+                                }
 
-			if (sourceModuleSections != null)
-				foreach (var src in sourceModuleSections)
-					foreach (var fi in src.FileInfo)
-						if(fi.SourceFileName == module)
-							for (uint k = 0; k < fi.Segments.Length; k++)
-							{
-								var segment = fi.Segments[k];
+                                line = segment.Lines[m];
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
 
-								int m = 0;
-								for (; m < segment.Lines.Length; m++)
-									if (line == segment.Lines[m])
-									{
-										virtualMemoryOffset =
-											PEHeader.OptionalHeader32.ImageBase +
-											PEHeader.OptionalHeader32.BaseOfCode +
-											segment.Offsets[m];
-										return true;
-									}
-							}
+            return false;
+        }
 
-			return false;
-		}
-	}
+        public bool TryGetOffsetByCodeLocation(string module, ushort line, out uint virtualMemoryOffset)
+        {
+            virtualMemoryOffset = 0;
+
+            if (sourceModuleSections != null)
+            {
+                foreach (SSTSrcModule src in sourceModuleSections)
+                {
+                    foreach (SSTSrcModule.SourceFileInformation fi in src.FileInfo)
+                    {
+                        if (fi.SourceFileName == module)
+                        {
+                            for (uint k = 0; k < fi.Segments.Length; k++)
+                            {
+                                SSTSrcModule.SourceSegmentInfo segment = fi.Segments[k];
+
+                                int m = 0;
+                                for (; m < segment.Lines.Length; m++)
+                                {
+                                    if (line == segment.Lines[m])
+                                    {
+                                        virtualMemoryOffset = PEHeader.OptionalHeader32.ImageBase + PEHeader.OptionalHeader32.BaseOfCode + segment.Offsets[m];
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+    }
 }

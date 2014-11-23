@@ -1,36 +1,37 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 using System.IO;
 
-namespace CodeViewExaminer.PortableExecutable
+namespace Igloo
 {
-	public class TlsSectionReader : ISectionHandler
-	{
-		public bool CanHandle(string SectionName)
-		{
-			return SectionName == ".tls";
-		}
+    public class TlsSectionReader : ISectionHandler
+    {
+        public bool CanHandle(string SectionName)
+        {
+            return SectionName == ".tls";
+        }
 
-		public CodeSection Handle(PeHeader PeHeader, PeSectionHeader Header, BinaryReader r)
-		{
-			var tls = new TlsSection { SectionHeader=Header,
-				Is64=!PeHeader.Is32BitHeader
-			};
+        public CodeSection Handle(PeHeader PeHeader, PeSectionHeader Header, BinaryReader r)
+        {
+            TlsSection tls = new TlsSection();
+            tls.SectionHeader = Header;
+            tls.Is64 = !PeHeader.Is32BitHeader;
 
-			if (tls.Is64)
-				tls.TlsDirectory64 = Misc.FromBinaryReader<IMAGE_TLS_DIRECTORY64>(r);
-			else
-				tls.TlsDirectory = Misc.FromBinaryReader<IMAGE_TLS_DIRECTORY32>(r);
+            if (tls.Is64)
+            {
+                tls.TlsDirectory64 = Misc.FromBinaryReader<IMAGE_TLS_DIRECTORY64>(r);
+            }
+            else
+            {
+                tls.TlsDirectory = Misc.FromBinaryReader<IMAGE_TLS_DIRECTORY32>(r);
+            }
+            return tls;
+        }
+    }
 
-			return tls;
-		}
-	}
-
-	public class TlsSection : CodeSection
-	{
-		public bool Is64;
-		public IMAGE_TLS_DIRECTORY32 TlsDirectory;
-		public IMAGE_TLS_DIRECTORY64 TlsDirectory64;
-	}
+    public class TlsSection : CodeSection
+    {
+        public bool Is64;
+        public IMAGE_TLS_DIRECTORY32 TlsDirectory;
+        public IMAGE_TLS_DIRECTORY64 TlsDirectory64;
+    }
 }
